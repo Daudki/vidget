@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<meta name="description" content="Download videos from YouTube, TikTok, Instagram and 1000+ sites. No account needed."/>
+<title>VidGet — theOutcast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800;900&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/static/css/main.css"/>
+</head>
+<body>
+
+<div class="noise"></div>
+<div class="glow-orb orb-1"></div>
+<div class="glow-orb orb-2"></div>
+
+<div class="wrap">
+
+  <header>
+    <div class="header-top">
+      <div class="brand-eyebrow">theOutcast</div>
+      <div class="status-dot" title="Server online"></div>
+    </div>
+    <div class="brand">
+      <h1 class="brand-name">VidGet</h1>
+      <span class="brand-tag">v2</span>
+    </div>
+    <p class="tagline">Paste a link. Get the video.</p>
+  </header>
+
+  <main>
+
+    <section class="card" id="inputCard">
+      <div class="card-inner">
+
+        <div class="field">
+          <label for="txt">URL or pasted text</label>
+          <div class="textarea-wrap">
+            <textarea id="txt" placeholder="youtube.com/watch?v=... · tiktok.com · instagram.com · twitter.com · and 1000+ more"></textarea>
+            <div class="char-hint" id="charHint"></div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field" style="flex:1">
+            <label for="fname">Filename <span class="label-opt">optional</span></label>
+            <input type="text" id="fname" placeholder="leave blank for auto"/>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Format</label>
+          <div class="fmt-group">
+            <button class="fmt-btn active" data-fmt="mp4">
+              <span class="fmt-icon">▶</span>
+              <span class="fmt-label">MP4</span>
+              <span class="fmt-sub">Video + Audio</span>
+            </button>
+            <button class="fmt-btn" data-fmt="mp3">
+              <span class="fmt-icon">♪</span>
+              <span class="fmt-label">MP3</span>
+              <span class="fmt-sub">Audio only</span>
+            </button>
+            <button class="fmt-btn" data-fmt="best">
+              <span class="fmt-icon">◈</span>
+              <span class="fmt-label">Best</span>
+              <span class="fmt-sub">Max quality</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button class="btn-add" id="btnAdd">
+            <span class="btn-icon">+</span>
+            Add to Queue
+          </button>
+          <button class="btn-ghost" id="btnClear">Clear</button>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="queue-section" id="queueSection">
+      <div class="queue-header">
+        <span class="queue-title">Queue</span>
+        <span class="badge" id="badge">0</span>
+      </div>
+      <div id="queueDiv">
+        <div class="empty-state" id="emptyMsg">
+          <div class="empty-icon">⬡</div>
+          <div class="empty-text">Nothing queued yet</div>
+          <div class="empty-sub">Add URLs above to get started</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="dl-bar" id="dlBar">
+    <button class="btn-dl" id="btnDl" disabled>
+      <span id="btnDlText">Download All</span>
+      <span class="btn-dl-count" id="btnDlCount"></span>
+    </button>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/static/js/main.js"></script>
+</body>
+</html>
