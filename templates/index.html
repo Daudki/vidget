@@ -1,113 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-<meta name="description" content="Download videos from YouTube, TikTok, Instagram and 1000+ sites. No account needed."/>
-<title>VidGet — theOutcast</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800;900&family=DM+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="/static/css/main.css"/>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="description" content="Download videos and audio from YouTube, TikTok, Instagram, Twitter and 1000+ sites. Free, fast, no account required."/>
+  <meta name="theme-color" content="#6366f1"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="VidGet"/>
+  <title>VidGet — Video Downloader</title>
+  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml"/>
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png"/>
+  <link rel="manifest" href="/manifest.webmanifest"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/css/main.css"/>
 </head>
 <body>
 
-<div class="noise"></div>
-<div class="glow-orb orb-1"></div>
-<div class="glow-orb orb-2"></div>
-
-<div class="wrap">
-
-  <header>
-    <div class="header-top">
-      <div class="brand-eyebrow">theOutcast</div>
-      <div class="status-dot" title="Server online"></div>
-    </div>
-    <div class="brand">
-      <h1 class="brand-name">VidGet</h1>
-      <span class="brand-tag">v2</span>
-    </div>
-    <p class="tagline">Paste a link. Get the video.</p>
-  </header>
-
-  <main>
-
-    <section class="card" id="inputCard">
-      <div class="card-inner">
-
-        <div class="field">
-          <label for="txt">URL or pasted text</label>
-          <div class="textarea-wrap">
-            <textarea id="txt" placeholder="youtube.com/watch?v=... · tiktok.com · instagram.com · twitter.com · and 1000+ more"></textarea>
-            <div class="char-hint" id="charHint"></div>
-          </div>
-        </div>
-
-        <div class="field-row">
-          <div class="field" style="flex:1">
-            <label for="fname">Filename <span class="label-opt">optional</span></label>
-            <input type="text" id="fname" placeholder="leave blank for auto"/>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Format</label>
-          <div class="fmt-group">
-            <button class="fmt-btn active" data-fmt="mp4">
-              <span class="fmt-icon">▶</span>
-              <span class="fmt-label">MP4</span>
-              <span class="fmt-sub">Video + Audio</span>
-            </button>
-            <button class="fmt-btn" data-fmt="mp3">
-              <span class="fmt-icon">♪</span>
-              <span class="fmt-label">MP3</span>
-              <span class="fmt-sub">Audio only</span>
-            </button>
-            <button class="fmt-btn" data-fmt="best">
-              <span class="fmt-icon">◈</span>
-              <span class="fmt-label">Best</span>
-              <span class="fmt-sub">Max quality</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="action-row">
-          <button class="btn-add" id="btnAdd">
-            <span class="btn-icon">+</span>
-            Add to Queue
-          </button>
-          <button class="btn-ghost" id="btnClear">Clear</button>
-        </div>
-
-      </div>
-    </section>
-
-    <section class="queue-section" id="queueSection">
-      <div class="queue-header">
-        <span class="queue-title">Queue</span>
-        <span class="badge" id="badge">0</span>
-      </div>
-      <div id="queueDiv">
-        <div class="empty-state" id="emptyMsg">
-          <div class="empty-icon">⬡</div>
-          <div class="empty-text">Nothing queued yet</div>
-          <div class="empty-sub">Add URLs above to get started</div>
-        </div>
-      </div>
-    </section>
-
-  </main>
-
-  <div class="dl-bar" id="dlBar">
-    <button class="btn-dl" id="btnDl" disabled>
-      <span id="btnDlText">Download All</span>
-      <span class="btn-dl-count" id="btnDlCount"></span>
-    </button>
+  <div class="app-bg" aria-hidden="true">
+    <div class="app-bg__mesh"></div>
+    <div class="app-bg__orb app-bg__orb--1"></div>
+    <div class="app-bg__orb app-bg__orb--2"></div>
   </div>
 
-</div>
+  <div class="app">
 
-<div class="toast" id="toast"></div>
+    <aside class="sidebar" aria-label="App info">
+      <div class="sidebar__brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="40" height="40" rx="10" fill="url(#logoGrad)"/>
+            <path d="M15 12v16l12-8-12-8z" fill="white"/>
+            <defs>
+              <linearGradient id="logoGrad" x1="0" y1="0" x2="40" y2="40">
+                <stop stop-color="#818cf8"/>
+                <stop offset="1" stop-color="#a78bfa"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <span class="sidebar__eyebrow">theOutcast</span>
+          <h1 class="sidebar__title">VidGet</h1>
+        </div>
+      </div>
+      <p class="sidebar__tagline">Save videos and audio from your favorite platforms — right in your browser.</p>
+      <ul class="platforms" aria-label="Supported platforms">
+        <li><span class="platform-chip">YouTube</span></li>
+        <li><span class="platform-chip">TikTok</span></li>
+        <li><span class="platform-chip">Instagram</span></li>
+        <li><span class="platform-chip">Twitter/X</span></li>
+        <li><span class="platform-chip">Facebook</span></li>
+        <li><span class="platform-chip platform-chip--more">+1000 sites</span></li>
+      </ul>
+      <div class="sidebar__stats">
+        <div class="stat">
+          <span class="stat__label">Downloads left</span>
+          <span class="stat__value" id="limitRemaining">—</span>
+        </div>
+        <div class="stat">
+          <span class="stat__label">Server</span>
+          <span class="stat__value stat__value--status" id="serverStatus">
+            <span class="status-pill" id="statusPill">Checking…</span>
+          </span>
+        </div>
+      </div>
+      <button type="button" class="btn-install hidden" id="btnInstall" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0l4-4m-4 4l-4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+        Install app
+      </button>
+    </aside>
 
-<script src="/static/js/main.js"></script>
+    <div class="main">
+
+      <header class="topbar">
+        <div class="topbar__mobile-brand">
+          <div class="logo logo--sm" aria-hidden="true">
+            <svg viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="10" fill="#6366f1"/><path d="M15 12v16l12-8-12-8z" fill="white"/></svg>
+          </div>
+          <span class="topbar__name">VidGet</span>
+        </div>
+        <button type="button" class="btn-install btn-install--sm hidden" id="btnInstallMobile" hidden>Install</button>
+      </header>
+
+      <main class="content">
+
+        <section class="panel panel--input" aria-labelledby="inputHeading">
+          <div class="panel__head">
+            <h2 id="inputHeading" class="panel__title">New download</h2>
+            <p class="panel__sub">Paste a link or block of text — we'll find URLs automatically.</p>
+          </div>
+          <div class="panel__body">
+
+            <div class="field">
+              <label for="txt" class="field__label">Video URL</label>
+              <div class="input-wrap">
+                <svg class="input-wrap__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+                <textarea id="txt" rows="3" placeholder="https://youtube.com/watch?v=… or paste multiple links"></textarea>
+                <span class="input-hint" id="charHint" aria-live="polite"></span>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field field--grow">
+                <label for="fname" class="field__label">Filename <span class="field__optional">optional</span></label>
+                <input type="text" id="fname" placeholder="my-video" autocomplete="off"/>
+              </div>
+            </div>
+
+            <fieldset class="field">
+              <legend class="field__label">Output format</legend>
+              <div class="format-grid" role="group" aria-label="Output format">
+                <button type="button" class="format-card active" data-fmt="mp4" aria-pressed="true">
+                  <span class="format-card__icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l6 3-6 3V9z" fill="currentColor" stroke="none"/></svg>
+                  </span>
+                  <span class="format-card__name">MP4</span>
+                  <span class="format-card__desc">Video + audio</span>
+                </button>
+                <button type="button" class="format-card" data-fmt="mp3" aria-pressed="false">
+                  <span class="format-card__icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                  </span>
+                  <span class="format-card__name">MP3</span>
+                  <span class="format-card__desc">Audio only</span>
+                </button>
+                <button type="button" class="format-card" data-fmt="best" aria-pressed="false">
+                  <span class="format-card__icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  </span>
+                  <span class="format-card__name">Best</span>
+                  <span class="format-card__desc">Max quality</span>
+                </button>
+              </div>
+            </fieldset>
+
+            <div class="panel__actions">
+              <button type="button" class="btn btn--primary" id="btnAdd">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Add to queue
+              </button>
+              <button type="button" class="btn btn--secondary" id="btnClear">Clear queue</button>
+            </div>
+
+          </div>
+        </section>
+
+        <section class="panel panel--queue" aria-labelledby="queueHeading">
+          <div class="panel__head panel__head--row">
+            <div>
+              <h2 id="queueHeading" class="panel__title">Download queue</h2>
+              <p class="panel__sub" id="queueSub">Nothing queued yet</p>
+            </div>
+            <span class="queue-badge" id="badge" aria-label="Items in queue">0</span>
+          </div>
+          <div class="panel__body panel__body--flush">
+            <div id="queueDiv" class="queue-list">
+              <div class="empty" id="emptyMsg">
+                <div class="empty__icon" aria-hidden="true">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </div>
+                <p class="empty__title">Your queue is empty</p>
+                <p class="empty__text">Add a URL above, then tap <strong>Start downloads</strong> below.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <footer class="app-footer">
+        <p>Files download directly to your device. VidGet does not store your media.</p>
+        <p class="app-footer__brand">theOutcast · VidGet</p>
+      </footer>
+
+      <div class="action-bar" id="dlBar">
+        <button type="button" class="btn-download" id="btnDl" disabled>
+          <span class="btn-download__icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </span>
+          <span id="btnDlText">Start downloads</span>
+          <span class="btn-download__count" id="btnDlCount" hidden></span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="/static/js/main.js"></script>
 </body>
 </html>
