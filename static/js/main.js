@@ -166,6 +166,12 @@
     st.className = 'item-status ' + (cls || '');
   }
 
+  function phaseLabel(phase) {
+    if (phase === 'merge') return 'Merging video + audio…';
+    if (phase === 'download') return 'Downloading…';
+    return 'Downloading…';
+  }
+
   function updateProgress(itemId, d) {
     var pb = $('pb-' + itemId);
     var pw = $('pw-' + itemId);
@@ -190,6 +196,11 @@
           .then(function (r) { return r.json(); })
           .then(function (d) {
             updateProgress(itemId, d);
+            if (d.phase === 'merge') {
+              setStatus(itemId, phaseLabel('merge'), 'dl');
+            } else if (d.phase === 'download' && d.percent > 0) {
+              setStatus(itemId, phaseLabel('download'), 'dl');
+            }
             if (d.status === 'ready' || d.status === 'error') {
               clearInterval(interval);
               resolve(d);
@@ -244,6 +255,10 @@
     }
 
     setStatus(item.id, 'Downloading…', 'dl');
+    var pw = $('pw-' + item.id);
+    var pi = $('pi-' + item.id);
+    if (pw) pw.style.display = 'block';
+    if (pi) pi.style.display = 'flex';
     var result = await pollJob(jobId, item.id);
 
     if (result.status === 'error') {
@@ -281,16 +296,23 @@
     try {
       var r = await fetch('/health');
       var d = await r.json();
-      if (d.status === 'ok' && d.yt_dlp) {
+      if (d.status === 'ok' && d.yt_dlp && d.ffmpeg) {
         pill.textContent = 'Online';
         pill.className = 'status-pill is-online';
+        pill.title = 'yt-dlp and ffmpeg ready';
+      } else if (d.yt_dlp && !d.ffmpeg) {
+        pill.textContent = 'No ffmpeg';
+        pill.className = 'status-pill is-offline';
+        pill.title = 'Install ffmpeg for video+audio merge';
       } else {
         pill.textContent = 'Limited';
         pill.className = 'status-pill is-offline';
+        pill.title = '';
       }
     } catch (e) {
       pill.textContent = 'Offline';
       pill.className = 'status-pill is-offline';
+      pill.title = '';
     }
   }
 
@@ -319,6 +341,29 @@
 
   var txt = $('txt');
   var charHint = $('charHint');
+
+  $('btnPaste').addEventListener('click', async function () {
+    try {
+      var clip = await navigator.clipboard.readText();
+      if (!clip || !clip.trim()) {
+        toast('Clipboard is empty', 'err');
+        return;
+      }
+      txt.value = txt.value ? txt.value.trim() + '\n' + clip.trim() : clip.trim();
+      txt.dispatchEvent(new Event('input'));
+      txt.focus();
+    } catch (e) {
+      toast('Allow clipboard access to paste', 'err');
+    }
+  });
+
+  $('btnClearUrl').addEventListener('click', function () {
+    txt.value = '';
+    charHint.textContent = '';
+    charHint.className = 'input-hint';
+    txt.focus();
+  });
+
   txt.addEventListener('input', function () {
     var urls = extractURLs(this.value);
     if (urls.length > 1) {

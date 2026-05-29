@@ -1,2 +1,4 @@
 flask
 yt-dlp
+ffmpeg-python
+moviepy

@@ -1,6 +1,7 @@
 import subprocess
 import os
 import re
+import shutil
 import threading
 import tempfile
 import time
@@ -40,56 +41,141 @@ def rate_limit_remaining(ip):
         return max(0, RATE_LIMIT - len(recent))
 
 
-def run_download(job_id, url, name, fmt):
-    tmp_dir = tempfile.mkdtemp()
+def tool_available(name):
+    try:
+        subprocess.run([name, '-version'], capture_output=True, check=True, timeout=5)
+        return True
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
+        return False
+
+
+# yt-dlp names separate DASH streams like video.f248.webm — never serve those as final output
+_FRAGMENT_RE = re.compile(r'\.f\d+\.')
+
+
+def build_ytdlp_command(tmp_dir, base_name, fmt, url):
+    """Build yt-dlp argv. Use %(ext)s in -o so video+audio merge reliably (especially long videos)."""
+    base = re.sub(r'[^\w.\- ]', '_', (base_name or 'video').strip()) or 'video'
+    out_tpl = os.path.join(tmp_dir, base + '.%(ext)s')
+    common = [
+        'yt-dlp',
+        '--no-playlist',
+        '--newline',
+        '--no-warnings',
+        '--no-keep-video',
+        '-o', out_tpl,
+    ]
 
     if fmt == 'mp3':
-        yt_fmt = ['--extract-audio', '--audio-format', 'mp3', '--audio-quality', '0']
-        ext = 'mp3'
-    elif fmt == 'best':
-        yt_fmt = ['-f', 'bv*+ba/b/best', '--merge-output-format', 'mp4']
-        ext = 'mp4'
-    else:
-        yt_fmt = ['-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best', '--merge-output-format', 'mp4']
-        ext = 'mp4'
+        return common + [
+            '--extract-audio',
+            '--audio-format', 'mp3',
+            '--audio-quality', '0',
+            url,
+        ], base, 'mp3'
 
-    filename = (name or 'video') + '.' + ext
-    outpath = os.path.join(tmp_dir, filename)
-    cmd = ['yt-dlp', '--no-playlist', '--newline', '--no-warnings'] + yt_fmt + ['-o', outpath, url]
+    merge = ['--merge-output-format', 'mp4']
+    # Prefer separate best video+audio, then mux with ffmpeg (AAC for broad MP4 compatibility)
+    video_audio = [
+        '-f', 'bestvideo*+bestaudio/best',
+        *merge,
+        '--postprocessor-args', 'Merger+ffmpeg_i:-c:v copy -c:a aac -movflags +faststart',
+    ]
+
+    if fmt == 'best':
+        return common + [
+            '-f', 'bv*+ba/b/best',
+            *merge,
+            '--postprocessor-args', 'Merger+ffmpeg_i:-c:v copy -c:a aac -movflags +faststart',
+            url,
+        ], base, 'mp4'
+
+    return common + video_audio + [url], base, 'mp4'
+
+
+def resolve_output_file(tmp_dir, base_name, ext):
+    """Pick the merged output file, not a leftover video-only DASH fragment."""
+    base = re.sub(r'[^\w.\- ]', '_', (base_name or 'video').strip()) or 'video'
+    preferred = os.path.join(tmp_dir, f'{base}.{ext}')
+    if os.path.isfile(preferred) and os.path.getsize(preferred) > 0:
+        return preferred, f'{base}.{ext}'
+
+    candidates = []
+    for name in os.listdir(tmp_dir):
+        if name.endswith(('.part', '.ytdl', '.temp')):
+            continue
+        if _FRAGMENT_RE.search(name):
+            continue
+        path = os.path.join(tmp_dir, name)
+        if not os.path.isfile(path) or os.path.getsize(path) == 0:
+            continue
+        if name.endswith(f'.{ext}'):
+            candidates.append((path, name))
+
+    if candidates:
+        path, name = max(candidates, key=lambda pair: os.path.getsize(pair[0]))
+        return path, name
+
+    return None, None
+
+
+def run_download(job_id, url, name, fmt):
+    tmp_dir = tempfile.mkdtemp()
+    cmd, base_name, ext = build_ytdlp_command(tmp_dir, name, fmt, url)
+    log_tail = []
 
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
         for line in proc.stdout:
-            m = re.search(r'\[download\]\s+([\d.]+)%.*?at\s+(\S+)\s+ETA\s+(\S+)', line.strip())
+            line = line.strip()
+            if line:
+                log_tail.append(line)
+                if len(log_tail) > 40:
+                    log_tail.pop(0)
+
+            m = re.search(r'\[download\]\s+([\d.]+)%.*?at\s+(\S+)\s+ETA\s+(\S+)', line)
             if m:
                 with jobs_lock:
                     jobs[job_id].update({
                         'percent': float(m.group(1)),
                         'speed': m.group(2),
                         'eta': m.group(3),
+                        'phase': 'download',
+                    })
+                continue
+
+            if '[Merger]' in line or '[ffmpeg]' in line or 'Merging formats' in line:
+                with jobs_lock:
+                    jobs[job_id].update({
+                        'percent': max(jobs[job_id].get('percent', 0), 99),
+                        'speed': '',
+                        'eta': '',
+                        'phase': 'merge',
                     })
 
         proc.wait()
 
         if proc.returncode != 0:
+            detail = next(
+                (ln for ln in reversed(log_tail) if 'ERROR' in ln or 'error' in ln.lower()),
+                None,
+            )
+            msg = 'Download failed — check the URL or try another format'
+            if detail and len(detail) < 200:
+                msg = detail.replace('ERROR: ', '').strip()
+            with jobs_lock:
+                jobs[job_id].update({'status': 'error', 'error': msg})
+            return
+
+        actual, filename = resolve_output_file(tmp_dir, base_name, ext)
+        if not actual:
             with jobs_lock:
                 jobs[job_id].update({
                     'status': 'error',
-                    'error': 'Download failed — check the URL or try another format',
+                    'error': 'Merge failed — is ffmpeg installed on the server?',
                 })
             return
-
-        actual = outpath
-        if not os.path.exists(actual):
-            files = os.listdir(tmp_dir)
-            if files:
-                actual = os.path.join(tmp_dir, files[0])
-                filename = files[0]
-            else:
-                with jobs_lock:
-                    jobs[job_id].update({'status': 'error', 'error': 'Output file not found'})
-                return
 
         with jobs_lock:
             jobs[job_id].update({
@@ -97,6 +183,7 @@ def run_download(job_id, url, name, fmt):
                 'percent': 100,
                 'filepath': actual,
                 'filename': filename,
+                'phase': 'done',
             })
 
     except Exception as e:
@@ -111,12 +198,14 @@ def index():
 
 @app.route('/health')
 def health():
-    try:
-        subprocess.run(['yt-dlp', '--version'], capture_output=True, check=True, timeout=5)
-        yt_ok = True
-    except (subprocess.SubprocessError, FileNotFoundError, OSError):
-        yt_ok = False
-    return jsonify(status='ok' if yt_ok else 'degraded', yt_dlp=yt_ok)
+    yt_ok = tool_available('yt-dlp')
+    ffmpeg_ok = tool_available('ffmpeg')
+    ready = yt_ok and ffmpeg_ok
+    return jsonify(
+        status='ok' if ready else 'degraded',
+        yt_dlp=yt_ok,
+        ffmpeg=ffmpeg_ok,
+    )
 
 
 @app.route('/api/limits')
@@ -146,6 +235,7 @@ def start():
             'percent': 0,
             'speed': '',
             'eta': '',
+            'phase': 'starting',
             'filepath': None,
             'filename': None,
             'error': None,
@@ -166,6 +256,7 @@ def status(job_id):
         'percent': job['percent'],
         'speed': job['speed'],
         'eta': job['eta'],
+        'phase': job.get('phase', ''),
         'error': job['error'],
     }
     if job['status'] == 'ready' and job.get('filename'):
@@ -193,10 +284,10 @@ def get_file(job_id):
     @after_this_request
     def cleanup(response):
         try:
-            if os.path.exists(filepath):
-                os.unlink(filepath)
             if os.path.isdir(tmp_dir):
-                os.rmdir(tmp_dir)
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            elif os.path.exists(filepath):
+                os.unlink(filepath)
         except OSError:
             pass
         with jobs_lock:

@@ -95,7 +95,13 @@
           <div class="panel__body">
 
             <div class="field">
-              <label for="txt" class="field__label">Video URL</label>
+              <div class="field__label-row">
+                <label for="txt" class="field__label">Video URL</label>
+                <div class="input-actions">
+                  <button type="button" class="btn-text" id="btnPaste" title="Paste from clipboard">Paste</button>
+                  <button type="button" class="btn-text" id="btnClearUrl" title="Clear URL field">Clear</button>
+                </div>
+              </div>
               <div class="input-wrap">
                 <svg class="input-wrap__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
                 <textarea id="txt" rows="3" placeholder="https://youtube.com/watch?v=… or paste multiple links"></textarea>
@@ -118,7 +124,7 @@
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 9l6 3-6 3V9z" fill="currentColor" stroke="none"/></svg>
                   </span>
                   <span class="format-card__name">MP4</span>
-                  <span class="format-card__desc">Video + audio</span>
+                  <span class="format-card__desc">Video + audio merged</span>
                 </button>
                 <button type="button" class="format-card" data-fmt="mp3" aria-pressed="false">
                   <span class="format-card__icon" aria-hidden="true">
