@@ -77,8 +77,9 @@ def build_ytdlp_command(tmp_dir, base_name, fmt, url):
 
     # SINGLE LINE THAT ALWAYS GETS AUDIO
     return common + [
-        '-f', 'mp4',
-        url,
+    '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
+    '--merge-output-format', 'mp4',
+    url,
     ], base, 'mp4'
 
 def resolve_output_file(tmp_dir, base_name, ext):
