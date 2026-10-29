@@ -107,7 +107,7 @@
     if (canRemove) el.setAttribute('data-queued', '1');
 
     var shortUrl = item.url.length > 72 ? item.url.slice(0, 72) + '…' : item.url;
-    var fmtLabel = engine === 'files' ? 'File' : item.fmt === 'mp3' ? 'MP3' : item.fmt === 'best' ? 'Best' : 'MP4';
+    var fmtLabel = engine === 'files' ? 'File' : engine === 'photos' ? 'Photos' : item.fmt === 'mp3' ? 'MP3' : item.fmt === 'best' ? 'Best' : 'MP4';
     var domain = domainFromUrl(item.url);
     var label = faviconLabel(domain);
 
@@ -229,7 +229,91 @@
     document.body.removeChild(a);
   }
 
+  function makeLink(className, href, text, download) {
+    var a = document.createElement('a');
+    a.className = className;
+    a.href = href;
+    a.textContent = text;
+    if (download) a.setAttribute('download', '');
+    return a;
+  }
+
+  function renderGallery(itemId, data) {
+    var body = $('qi-' + itemId).querySelector('.item__body');
+    var wrap = document.createElement('div');
+    wrap.className = 'gallery';
+
+    var summary = [];
+    if (data.author) summary.push('@' + data.author);
+    if (data.caption) summary.push(data.caption);
+    if (summary.length) {
+      var meta = document.createElement('p');
+      meta.className = 'gallery__meta';
+      meta.textContent = summary.join(' — ');
+      wrap.appendChild(meta);
+    }
+
+    var grid = document.createElement('div');
+    grid.className = 'gallery__grid';
+    data.images.forEach(function (image) {
+      var src = '/photos/img/' + encodeURIComponent(data.token) + '/' + image.index;
+      var cell = document.createElement('div');
+      cell.className = 'gallery__cell';
+      var img = document.createElement('img');
+      img.loading = 'lazy';
+      img.alt = 'Photo ' + image.index;
+      img.src = src;
+      cell.appendChild(img);
+      cell.appendChild(makeLink('gallery__save', src + '?dl=1', 'Save', true));
+      grid.appendChild(cell);
+    });
+    wrap.appendChild(grid);
+
+    var actions = document.createElement('div');
+    actions.className = 'gallery__actions';
+    actions.appendChild(makeLink('gallery__btn gallery__btn--primary', '/photos/zip/' + encodeURIComponent(data.token), 'Download all (ZIP)', true));
+    if (data.music) {
+      var label = data.music.title ? 'Save music — ' + data.music.title : 'Save music';
+      actions.appendChild(makeLink('gallery__btn', '/photos/music/' + encodeURIComponent(data.token), label, true));
+    }
+    wrap.appendChild(actions);
+    body.appendChild(wrap);
+  }
+
+  async function processPhotos(item) {
+    setItemState(item.id, 'is-active');
+    setStatus(item.id, 'Finding photos…', 'dl');
+
+    var data;
+    try {
+      var r = await fetch('/photos/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: item.url }),
+      });
+      data = await r.json();
+      if (data.remaining !== undefined) updateLimits(data.remaining);
+      if (!r.ok) {
+        setItemState(item.id, 'is-error');
+        setStatus(item.id, data.error || 'Could not read this post', 'err');
+        toast(data.error || 'Could not read this post', 'err');
+        return false;
+      }
+    } catch (e) {
+      setItemState(item.id, 'is-error');
+      setStatus(item.id, 'Network error', 'err');
+      toast('Network error — check your connection', 'err');
+      return false;
+    }
+
+    renderGallery(item.id, data);
+    setItemState(item.id, 'is-done');
+    setStatus(item.id, data.count + (data.count === 1 ? ' photo found' : ' photos found'), 'ok');
+    return true;
+  }
+
   async function processItem(item) {
+    if (engine === 'photos') return processPhotos(item);
     setItemState(item.id, 'is-active');
     setStatus(item.id, 'Starting…', 'dl');
 

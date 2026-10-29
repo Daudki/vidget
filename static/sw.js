@@ -1,7 +1,8 @@
-const CACHE = 'vidget-v3';
+const CACHE = 'vidget-v4';
 const SHELL = [
   '/',
   '/files',
+  '/photos',
   '/static/css/main.css',
   '/static/js/main.js',
   '/static/icons/icon.svg',
@@ -32,7 +33,8 @@ self.addEventListener('fetch', (event) => {
 
   if (url.pathname.startsWith('/start') ||
       url.pathname.startsWith('/status/') ||
-      url.pathname.startsWith('/file/')) {
+      url.pathname.startsWith('/file/') ||
+      url.pathname.startsWith('/photos/')) {
     return;
   }
 

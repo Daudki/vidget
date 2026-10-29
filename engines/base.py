@@ -2,6 +2,7 @@ class Engine:
     key = ''
     route = ''
     default_fmt = ''
+    uses_jobs = True
     page = {}
 
     def ready(self):

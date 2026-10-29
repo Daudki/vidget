@@ -87,8 +87,9 @@ def sanitize(name):
     return name[:150]
 
 
-def open_stream(url):
+def open_stream(url, headers=None):
     current = url
+    merged = {**HEADERS, **(headers or {})}
     for _ in range(MAX_REDIRECTS + 1):
         parts = urlsplit(current)
         if parts.scheme not in ('http', 'https') or not parts.hostname:
@@ -98,7 +99,7 @@ def open_stream(url):
             stream=True,
             allow_redirects=False,
             timeout=TIMEOUT,
-            headers=HEADERS,
+            headers=merged,
         )
         if resp.status_code in REDIRECT_CODES:
             location = resp.headers.get('Location')

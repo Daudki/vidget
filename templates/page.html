@@ -117,7 +117,7 @@
               </div>
             </div>
 
-            <div class="field-row">
+            <div class="field-row"{% if page.gallery %} hidden{% endif %}>
               <div class="field field--grow">
                 <label for="fname" class="field__label">Filename <span class="field__optional">optional</span></label>
                 <input type="text" id="fname" placeholder="{{ page.name_placeholder }}" autocomplete="off"/>

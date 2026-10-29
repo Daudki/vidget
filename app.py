@@ -1,13 +1,20 @@
 import os
 import shutil
+import tempfile
 import threading
 import time
+import zipfile
 from collections import defaultdict
 
-from flask import Flask, request, jsonify, render_template, send_from_directory, send_file, after_this_request
+import requests
+from flask import Flask, Response, request, jsonify, render_template, send_from_directory, send_file, after_this_request
 
 import jobstore
+import photostore
 from engines import ENGINES, DEFAULT_ENGINE
+from engines import photos as photos_engine
+from engines import tiktok_photos
+from engines.direct import FetchError
 
 app = Flask(__name__)
 
@@ -87,6 +94,8 @@ def start():
         return jsonify(error='Unknown download engine'), 400
     if not url:
         return jsonify(error='No URL provided'), 400
+    if not engine.uses_jobs:
+        return jsonify(error='This engine does not use download jobs'), 400
 
     fmt = (data.get('fmt') or engine.default_fmt).strip()
     job_id = jobstore.create(engine.key)
@@ -142,6 +151,123 @@ def get_file(job_id):
         conditional=True,
         max_age=0,
     )
+
+
+@app.route('/photos/resolve', methods=['POST'])
+def photos_resolve():
+    ip = get_client_ip()
+    if is_rate_limited(ip):
+        return jsonify(error='Rate limit reached — max 10 downloads per hour'), 429
+
+    data = request.get_json(force=True, silent=True) or {}
+    url = (data.get('url') or '').strip()
+    if not url:
+        return jsonify(error='No URL provided'), 400
+
+    try:
+        post = tiktok_photos.resolve(url)
+    except tiktok_photos.ResolveError as exc:
+        return jsonify(error=str(exc), remaining=rate_limit_remaining(ip)), 422
+
+    token = photostore.put(post)
+    music = post['music']
+    return jsonify(
+        token=token,
+        author=post['author'],
+        caption=post['caption'][:300],
+        count=len(post['images']),
+        images=[
+            {'index': i['index'], 'width': i['width'], 'height': i['height']}
+            for i in post['images']
+        ],
+        music={'title': music['title'], 'author': music['author']} if music['url'] else None,
+        remaining=rate_limit_remaining(ip),
+    )
+
+
+def photo_basename(post):
+    return 'tiktok_{}_{}'.format(photos_engine.slug(post['author']), photos_engine.slug(post['id'] or '', 'post'))
+
+
+def stream_asset(url, filename_for, table, default_ext, as_attachment):
+    try:
+        resp = photos_engine.open_asset(url)
+    except (FetchError, requests.exceptions.RequestException):
+        return jsonify(error='Could not fetch the file from TikTok'), 502
+    ext = photos_engine.asset_extension(resp, table, default_ext)
+    mime = resp.headers.get('Content-Type', '').split(';')[0].strip() or 'application/octet-stream'
+    headers = {'Cache-Control': 'private, max-age=1500'}
+    if as_attachment:
+        headers.update(photos_engine.attachment_headers(filename_for(ext)))
+    length = resp.headers.get('Content-Length', '')
+    if length.isdigit():
+        headers['Content-Length'] = length
+    return Response(photos_engine.iter_asset(resp), mimetype=mime, headers=headers)
+
+
+@app.route('/photos/img/<token>/<int:index>')
+def photos_image(token, index):
+    post = photostore.get(token)
+    image = next((i for i in (post or {}).get('images', []) if i['index'] == index), None)
+    if not image:
+        return jsonify(error='Photo not found or expired'), 404
+    base = photo_basename(post)
+    return stream_asset(
+        image['url'],
+        lambda ext: f'{base}_{index}.{ext}',
+        photos_engine.IMAGE_EXT,
+        'jpg',
+        request.args.get('dl') == '1',
+    )
+
+
+@app.route('/photos/music/<token>')
+def photos_music(token):
+    post = photostore.get(token)
+    if not post or not post['music']['url']:
+        return jsonify(error='Music not found or expired'), 404
+    base = photo_basename(post)
+    return stream_asset(
+        post['music']['url'],
+        lambda ext: f'{base}_music.{ext}',
+        photos_engine.AUDIO_EXT,
+        'mp3',
+        True,
+    )
+
+
+@app.route('/photos/zip/<token>')
+def photos_zip(token):
+    post = photostore.get(token)
+    if not post:
+        return jsonify(error='Photos not found or expired'), 404
+
+    base = photo_basename(post)
+    tmp_dir = tempfile.mkdtemp()
+    path = os.path.join(tmp_dir, base + '.zip')
+    added = 0
+    with zipfile.ZipFile(path, 'w', zipfile.ZIP_STORED) as archive:
+        for image in post['images']:
+            try:
+                resp = photos_engine.open_asset(image['url'])
+            except (FetchError, requests.exceptions.RequestException):
+                continue
+            ext = photos_engine.asset_extension(resp, photos_engine.IMAGE_EXT, 'jpg')
+            with archive.open(f"{base}_{image['index']}.{ext}", 'w') as dest:
+                for chunk in photos_engine.iter_asset(resp):
+                    dest.write(chunk)
+            added += 1
+
+    if not added:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return jsonify(error='Could not fetch the photos from TikTok'), 502
+
+    @after_this_request
+    def cleanup(response):
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return response
+
+    return send_file(path, mimetype='application/zip', as_attachment=True, download_name=base + '.zip', max_age=0)
 
 
 @app.route('/manifest.webmanifest')

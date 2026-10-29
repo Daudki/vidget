@@ -11,7 +11,8 @@
   "categories": ["utilities", "multimedia"],
   "shortcuts": [
     { "name": "Videos", "url": "/" },
-    { "name": "Files", "url": "/files" }
+    { "name": "Files", "url": "/files" },
+    { "name": "Photos", "url": "/photos" }
   ],
   "icons": [
     {
