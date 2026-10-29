@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-  <meta name="description" content="Download videos and audio from YouTube, TikTok, Instagram, Twitter and 1000+ sites. Free, fast, no account required."/>
+  <meta name="description" content="{{ page.description }}"/>
   <meta name="theme-color" content="#6366f1"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="VidGet"/>
-  <title>VidGet — Video Downloader</title>
+  <title>{{ page.title }}</title>
   <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml"/>
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png"/>
   <link rel="manifest" href="/manifest.webmanifest"/>
@@ -17,7 +17,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/static/css/main.css"/>
 </head>
-<body>
+<body data-engine="{{ engine.key }}" data-noun="{{ page.noun }}" data-fmt="{{ 'mp4' if page.formats else 'original' }}">
+{% macro engine_nav(small=False) %}
+  <nav class="engine-nav{% if small %} engine-nav--sm{% endif %}" aria-label="Download type">
+    {% for e in engines %}
+    <a class="engine-nav__link{% if e.key == engine.key %} is-active{% endif %}" href="{{ e.route }}"{% if e.key == engine.key %} aria-current="page"{% endif %}>{{ e.page.nav }}</a>
+    {% endfor %}
+  </nav>
+{% endmacro %}
+
 
   <div class="app-bg" aria-hidden="true">
     <div class="app-bg__mesh"></div>
@@ -46,14 +54,13 @@
           <h1 class="sidebar__title">VidGet</h1>
         </div>
       </div>
-      <p class="sidebar__tagline">Save videos and audio from your favorite platforms — right in your browser.</p>
+      {{ engine_nav() }}
+      <p class="sidebar__tagline">{{ page.tagline }}</p>
       <ul class="platforms" aria-label="Supported platforms">
-        <li><span class="platform-chip">YouTube</span></li>
-        <li><span class="platform-chip">TikTok</span></li>
-        <li><span class="platform-chip">Instagram</span></li>
-        <li><span class="platform-chip">Twitter/X</span></li>
-        <li><span class="platform-chip">Facebook</span></li>
-        <li><span class="platform-chip platform-chip--more">+1000 sites</span></li>
+        {% for chip in page.chips %}
+        <li><span class="platform-chip">{{ chip }}</span></li>
+        {% endfor %}
+        <li><span class="platform-chip platform-chip--more">{{ page.more }}</span></li>
       </ul>
       <div class="sidebar__stats">
         <div class="stat">
@@ -82,6 +89,7 @@
           </div>
           <span class="topbar__name">VidGet</span>
         </div>
+        {{ engine_nav(true) }}
         <button type="button" class="btn-install btn-install--sm hidden" id="btnInstallMobile" hidden>Install</button>
       </header>
 
@@ -90,13 +98,13 @@
         <section class="panel panel--input" aria-labelledby="inputHeading">
           <div class="panel__head">
             <h2 id="inputHeading" class="panel__title">New download</h2>
-            <p class="panel__sub">Paste a link or block of text — we'll find URLs automatically.</p>
+            <p class="panel__sub">{{ page.panel_sub }}</p>
           </div>
           <div class="panel__body">
 
             <div class="field">
               <div class="field__label-row">
-                <label for="txt" class="field__label">Video URL</label>
+                <label for="txt" class="field__label">{{ page.label }}</label>
                 <div class="input-actions">
                   <button type="button" class="btn-text" id="btnPaste" title="Paste from clipboard">Paste</button>
                   <button type="button" class="btn-text" id="btnClearUrl" title="Clear URL field">Clear</button>
@@ -104,7 +112,7 @@
               </div>
               <div class="input-wrap">
                 <svg class="input-wrap__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-                <textarea id="txt" rows="3" placeholder="https://youtube.com/watch?v=… or paste multiple links"></textarea>
+                <textarea id="txt" rows="3" placeholder="{{ page.placeholder }}"></textarea>
                 <span class="input-hint" id="charHint" aria-live="polite"></span>
               </div>
             </div>
@@ -112,10 +120,11 @@
             <div class="field-row">
               <div class="field field--grow">
                 <label for="fname" class="field__label">Filename <span class="field__optional">optional</span></label>
-                <input type="text" id="fname" placeholder="my-video" autocomplete="off"/>
+                <input type="text" id="fname" placeholder="{{ page.name_placeholder }}" autocomplete="off"/>
               </div>
             </div>
 
+            {% if page.formats %}
             <fieldset class="field">
               <legend class="field__label">Output format</legend>
               <div class="format-grid" role="group" aria-label="Output format">
@@ -142,6 +151,7 @@
                 </button>
               </div>
             </fieldset>
+            {% endif %}
 
             <div class="panel__actions">
               <button type="button" class="btn btn--primary" id="btnAdd">
@@ -178,7 +188,7 @@
       </main>
 
       <footer class="app-footer">
-        <p>Files download directly to your device. VidGet does not store your media.</p>
+        <p>{{ page.footer }}</p>
         <p class="app-footer__brand">theOutcast · VidGet</p>
       </footer>
 

@@ -1,6 +1,7 @@
-const CACHE = 'vidget-v2';
+const CACHE = 'vidget-v3';
 const SHELL = [
   '/',
+  '/files',
   '/static/css/main.css',
   '/static/js/main.js',
   '/static/icons/icon.svg',

@@ -3,7 +3,9 @@
 
   var queue = [];
   var activeItems = [];
-  var selectedFmt = 'mp4';
+  var engine = document.body.getAttribute('data-engine') || 'video';
+  var noun = document.body.getAttribute('data-noun') || 'video';
+  var selectedFmt = document.body.getAttribute('data-fmt') || 'mp4';
   var isDownloading = false;
   var deferredInstall = null;
 
@@ -105,7 +107,7 @@
     if (canRemove) el.setAttribute('data-queued', '1');
 
     var shortUrl = item.url.length > 72 ? item.url.slice(0, 72) + '…' : item.url;
-    var fmtLabel = item.fmt === 'mp3' ? 'MP3' : item.fmt === 'best' ? 'Best' : 'MP4';
+    var fmtLabel = engine === 'files' ? 'File' : item.fmt === 'mp3' ? 'MP3' : item.fmt === 'best' ? 'Best' : 'MP4';
     var domain = domainFromUrl(item.url);
     var label = faviconLabel(domain);
 
@@ -179,12 +181,12 @@
     if (!pb || d.percent === undefined) return;
     pw.style.display = 'block';
     pi.style.display = 'flex';
-    pb.style.width = d.percent + '%';
+    pb.style.width = d.indeterminate ? '100%' : d.percent + '%';
     pb.setAttribute('aria-valuenow', Math.round(d.percent));
     var pct = $('pct-' + itemId);
     var spd = $('spd-' + itemId);
     var eta = $('eta-' + itemId);
-    if (pct) pct.textContent = Math.round(d.percent) + '%';
+    if (pct) pct.textContent = d.indeterminate ? (d.received || '…') : Math.round(d.percent) + '%';
     if (spd) spd.textContent = d.speed || '';
     if (eta) eta.textContent = d.eta ? 'ETA ' + d.eta : '';
   }
@@ -236,7 +238,7 @@
       var r = await fetch('/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: item.url, name: item.name, fmt: item.fmt }),
+        body: JSON.stringify({ url: item.url, name: item.name, fmt: item.fmt, engine: engine }),
       });
       var d = await r.json();
       if (!r.ok) {
@@ -296,11 +298,11 @@
     try {
       var r = await fetch('/health');
       var d = await r.json();
-      if (d.status === 'ok' && d.yt_dlp && d.ffmpeg) {
+      if (d.engines && d.engines[engine]) {
         pill.textContent = 'Online';
         pill.className = 'status-pill is-online';
-        pill.title = 'yt-dlp and ffmpeg ready';
-      } else if (d.yt_dlp && !d.ffmpeg) {
+        pill.title = 'Engine ready';
+      } else if (engine === 'video' && d.yt_dlp && !d.ffmpeg) {
         pill.textContent = 'No ffmpeg';
         pill.className = 'status-pill is-offline';
         pill.title = 'Install ffmpeg for video+audio merge';
@@ -380,7 +382,7 @@
 
   $('btnAdd').addEventListener('click', function () {
     var raw = txt.value.trim();
-    if (!raw) { toast('Paste a video URL first', 'err'); return; }
+    if (!raw) { toast('Paste a ' + noun + ' URL first', 'err'); return; }
 
     var urls = extractURLs(raw);
     if (!urls.length) { toast('No valid URL found', 'err'); return; }

@@ -9,6 +9,10 @@
   "background_color": "#0a0a12",
   "theme_color": "#6366f1",
   "categories": ["utilities", "multimedia"],
+  "shortcuts": [
+    { "name": "Videos", "url": "/" },
+    { "name": "Files", "url": "/files" }
+  ],
   "icons": [
     {
       "src": "/static/icons/icon-192.png",

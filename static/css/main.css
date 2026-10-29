@@ -945,3 +945,41 @@ input::placeholder { color: var(--text-muted); }
 
   .format-card__desc { display: none; }
 }
+
+/* Engine navigation */
+.engine-nav {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+}
+
+.engine-nav__link {
+  flex: 1;
+  text-align: center;
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 8px 14px;
+  border-radius: 100px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.engine-nav__link:hover { color: var(--text); }
+
+.engine-nav__link.is-active {
+  color: var(--text);
+  background: rgba(99, 102, 241, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.35);
+}
+
+.engine-nav--sm { padding: 3px; }
+
+.engine-nav--sm .engine-nav__link {
+  flex: none;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+}
