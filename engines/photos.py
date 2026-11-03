@@ -27,7 +27,7 @@ AUDIO_EXT = {
 
 
 def open_asset(url):
-    resp, _ = direct.open_stream(url, headers=ASSET_HEADERS)
+    resp, _ = direct.open_stream(url, headers=ASSET_HEADERS, engine='photos')
     if resp.status_code >= 400:
         resp.close()
         raise direct.FetchError(f'The server returned HTTP {resp.status_code}')

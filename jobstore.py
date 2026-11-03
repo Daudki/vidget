@@ -1,4 +1,5 @@
 import threading
+import time
 import uuid
 
 _jobs = {}
@@ -16,6 +17,7 @@ _BLANK = {
     'filename': None,
     'mime': None,
     'error': None,
+    'finished': None,
 }
 
 
@@ -31,6 +33,8 @@ def update(job_id, **fields):
         job = _jobs.get(job_id)
         if job is not None:
             job.update(fields)
+            if fields.get('status') in ('ready', 'error'):
+                job['finished'] = time.time()
 
 
 def get(job_id):
@@ -42,3 +46,10 @@ def get(job_id):
 def pop(job_id):
     with _lock:
         return _jobs.pop(job_id, None)
+
+
+def purge(max_age):
+    cutoff = time.time() - max_age
+    with _lock:
+        stale = [k for k, v in _jobs.items() if v['finished'] and v['finished'] < cutoff]
+        return [_jobs.pop(k) for k in stale]

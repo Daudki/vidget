@@ -12,6 +12,7 @@ import requests
 import urllib3.util.connection as u3conn
 from werkzeug.http import parse_options_header
 
+import config
 import jobstore
 from .base import Engine
 
@@ -60,7 +61,23 @@ _original_create_connection = u3conn.create_connection
 
 def guarded_create_connection(address, *args, **kwargs):
     host, port = address
+    if config.is_proxy_address(host, port):
+        return _original_create_connection(address, *args, **kwargs)
     return _original_create_connection((resolve_public(host), port), *args, **kwargs)
+
+
+def reject_private_literal(host):
+    name = host.strip('[]').lower()
+    if name == 'localhost' or name.endswith('.localhost'):
+        raise FetchError('That address is not allowed')
+    try:
+        addr = ipaddress.ip_address(name)
+    except ValueError:
+        return
+    if addr.version == 6 and addr.ipv4_mapped:
+        addr = addr.ipv4_mapped
+    if not addr.is_global:
+        raise FetchError('That address is not allowed')
 
 
 u3conn.create_connection = guarded_create_connection
@@ -87,19 +104,23 @@ def sanitize(name):
     return name[:150]
 
 
-def open_stream(url, headers=None):
+def open_stream(url, headers=None, engine='files'):
     current = url
     merged = {**HEADERS, **(headers or {})}
+    proxies = config.requests_proxies(engine)
     for _ in range(MAX_REDIRECTS + 1):
         parts = urlsplit(current)
         if parts.scheme not in ('http', 'https') or not parts.hostname:
             raise FetchError('Only http and https links are supported')
+        if proxies:
+            reject_private_literal(parts.hostname)
         resp = session.get(
             current,
             stream=True,
             allow_redirects=False,
             timeout=TIMEOUT,
             headers=merged,
+            proxies=proxies,
         )
         if resp.status_code in REDIRECT_CODES:
             location = resp.headers.get('Location')
@@ -239,6 +260,8 @@ class DirectEngine(Engine):
             )
         except FetchError as exc:
             fail(str(exc))
+        except requests.exceptions.ProxyError:
+            fail('The proxy refused the connection or is unreachable')
         except requests.exceptions.Timeout:
             fail('The server took too long to respond')
         except requests.exceptions.RequestException:

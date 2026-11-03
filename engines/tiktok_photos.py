@@ -5,6 +5,8 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 
+import config
+
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -28,6 +30,7 @@ def allowed_host(url):
 def fetch_html(url):
     session = requests.Session()
     session.trust_env = False
+    proxies = config.requests_proxies('photos')
     current = url
     for _ in range(MAX_REDIRECTS + 1):
         if urlsplit(current).scheme not in ('http', 'https') or not allowed_host(current):
@@ -38,6 +41,7 @@ def fetch_html(url):
             allow_redirects=False,
             timeout=(10, 20),
             stream=True,
+            proxies=proxies,
         )
         try:
             if resp.status_code in REDIRECT_CODES:
@@ -115,6 +119,8 @@ def extract(html):
 def resolve(url):
     try:
         final_url, html = fetch_html(url)
+    except requests.exceptions.ProxyError:
+        raise ResolveError('The proxy refused the connection or is unreachable')
     except requests.exceptions.Timeout:
         raise ResolveError('TikTok took too long to respond')
     except requests.exceptions.RequestException:

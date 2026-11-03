@@ -3,10 +3,13 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 
+import config
 import jobstore
 from .base import Engine
 
+MAX_SECONDS = int(os.environ.get('MAX_VIDEO_SECONDS', '600'))
 PROGRESS_RE = re.compile(r'\[download\]\s+([\d.]+)%.*?at\s+(\S+)\s+ETA\s+(\S+)')
 
 
@@ -33,10 +36,14 @@ def build_command(tmp_dir, base, fmt, url):
         '--socket-timeout', '300',
         '--retries', '20',
         '--fragment-retries', '20',
-        '--no-check-certificates',
         '--force-ipv4',
         '-o', out_tpl,
     ]
+    proxy = config.proxy_for('video')
+    if proxy:
+        common += ['--proxy', proxy]
+    else:
+        common.append('--no-check-certificates')
     if fmt == 'mp3':
         return common + [
             '--extract-audio',
@@ -107,6 +114,8 @@ class VideoEngine(Engine):
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
         proc = None
+        timer = None
+        timed_out = threading.Event()
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -115,6 +124,10 @@ class VideoEngine(Engine):
                 text=True,
                 bufsize=1,
             )
+
+            timer = threading.Timer(MAX_SECONDS, lambda: (timed_out.set(), proc.kill()))
+            timer.daemon = True
+            timer.start()
 
             log_tail = []
             for line in proc.stdout:
@@ -145,7 +158,12 @@ class VideoEngine(Engine):
                         phase='merge',
                     )
 
-            proc.wait(timeout=600)
+            proc.wait()
+            timer.cancel()
+
+            if timed_out.is_set():
+                fail(f'Download timed out after {MAX_SECONDS // 60} minutes. Try a shorter video.')
+                return
 
             if proc.returncode != 0:
                 detail = ''
@@ -156,7 +174,7 @@ class VideoEngine(Engine):
                 message = detail.replace('ERROR: ', '').strip() if detail else 'Download failed — check the URL'
                 if len(message) > 200:
                     message = message[:200] + '...'
-                fail(message)
+                fail(config.redact(message))
                 return
 
             actual, filename = resolve_output(tmp_dir, base, ext)
@@ -174,9 +192,8 @@ class VideoEngine(Engine):
                 phase='done',
             )
 
-        except subprocess.TimeoutExpired:
-            if proc:
-                proc.kill()
-            fail('Download timed out after 10 minutes. Try a shorter video.')
         except Exception as exc:
-            fail(str(exc)[:200])
+            fail(config.redact(str(exc))[:200])
+        finally:
+            if timer:
+                timer.cancel()

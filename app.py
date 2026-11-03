@@ -9,6 +9,7 @@ from collections import defaultdict
 import requests
 from flask import Flask, Response, request, jsonify, render_template, send_from_directory, send_file, after_this_request
 
+import config
 import jobstore
 import photostore
 from engines import ENGINES, DEFAULT_ENGINE
@@ -45,6 +46,27 @@ def rate_limit_remaining(ip):
         return max(0, RATE_LIMIT - len(recent))
 
 
+JOB_TTL = 1800
+JANITOR_INTERVAL = 300
+HEALTH_TTL = 30
+health_cache = {'at': 0.0, 'body': None}
+
+
+def janitor():
+    while True:
+        time.sleep(JANITOR_INTERVAL)
+        for job in jobstore.purge(JOB_TTL):
+            if job.get('filepath'):
+                shutil.rmtree(os.path.dirname(job['filepath']), ignore_errors=True)
+        now = time.time()
+        with ip_lock:
+            for ip in [k for k, v in ip_log.items() if not v or now - v[-1] >= RATE_WINDOW]:
+                del ip_log[ip]
+
+
+threading.Thread(target=janitor, daemon=True).start()
+
+
 def make_page_view(engine):
     def view():
         return render_template(
@@ -62,15 +84,20 @@ for _engine in ENGINES.values():
 
 @app.route('/health')
 def health():
-    readiness = {key: engine.ready() for key, engine in ENGINES.items()}
-    details = {}
-    for engine in ENGINES.values():
-        details.update(engine.details())
-    return jsonify(
-        status='ok' if all(readiness.values()) else 'degraded',
-        engines=readiness,
-        **details,
-    )
+    now = time.time()
+    if health_cache['body'] is None or now - health_cache['at'] > HEALTH_TTL:
+        readiness = {key: engine.ready() for key, engine in ENGINES.items()}
+        details = {}
+        for engine in ENGINES.values():
+            details.update(engine.details())
+        health_cache['body'] = dict(
+            status='ok' if all(readiness.values()) else 'degraded',
+            engines=readiness,
+            proxy=sorted(config.PROXY_ENGINES) if config.PROXY_URL else [],
+            **details,
+        )
+        health_cache['at'] = now
+    return jsonify(health_cache['body'])
 
 
 @app.route('/api/limits')

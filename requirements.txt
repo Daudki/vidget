@@ -1,5 +1,5 @@
 flask
-requests
+requests[socks]
 yt-dlp
 ffmpeg-python
 moviepy
