@@ -68,7 +68,7 @@
     if (pending > 0) {
       count.hidden = false;
       count.textContent = pending;
-      text.textContent = pending === 1 ? 'Start download' : 'Start downloads (' + pending + ')';
+      text.textContent = pending === 1 ? 'Start download' : 'Start downloads';
     } else {
       count.hidden = true;
       count.textContent = '';
