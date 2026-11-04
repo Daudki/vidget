@@ -15,11 +15,22 @@ HEADERS = {
 REDIRECT_CODES = (301, 302, 303, 307, 308)
 MAX_REDIRECTS = 6
 MAX_HTML = 5 * 1024 * 1024
-DATA_RE = re.compile(r'<script[^>]+id="__UNIVERSAL_DATA_FOR_REHYDRATION__"[^>]*>(.*?)</script>', re.S)
+SCRIPT_RE = re.compile(r'<script([^>]*)>(.*?)</script>', re.S)
+ID_RE = re.compile(r'\bid="([^"]+)"')
+POST_ID_RE = re.compile(r'/(?:video|photo)/(\d{8,})|/v/(\d{8,})')
+EMBED_URL = 'https://www.tiktok.com/embed/v2/{}'
+MAX_DIAG = 300
 
 
 class ResolveError(Exception):
-    pass
+    def __init__(self, message, diag='', terminal=False):
+        super().__init__(message)
+        self.message = message
+        self.diag = diag
+        self.terminal = terminal
+
+    def __str__(self):
+        return f'{self.message} [{self.diag[:MAX_DIAG]}]' if self.diag else self.message
 
 
 def allowed_host(url):
@@ -27,9 +38,14 @@ def allowed_host(url):
     return host == 'tiktok.com' or host.endswith('.tiktok.com')
 
 
-def fetch_html(url):
+def new_session():
     session = requests.Session()
     session.trust_env = False
+    return session
+
+
+def fetch_html(url, session=None):
+    session = session or new_session()
     proxies = config.requests_proxies('photos')
     current = url
     for _ in range(MAX_REDIRECTS + 1):
@@ -66,29 +82,82 @@ def fetch_html(url):
     raise ResolveError('Too many redirects')
 
 
-def extract(html):
-    match = DATA_RE.search(html)
-    if not match:
-        raise ResolveError('TikTok did not return the post data — the request may have been blocked')
-    try:
-        data = json.loads(match.group(1))
-    except ValueError:
-        raise ResolveError('TikTok returned unreadable post data')
+def json_blocks(html):
+    blocks = []
+    for attrs, body in SCRIPT_RE.findall(html):
+        body = body.strip()
+        if not body.startswith(('{', '[')):
+            continue
+        try:
+            data = json.loads(body)
+        except ValueError:
+            continue
+        match = ID_RE.search(attrs)
+        blocks.append((match.group(1) if match else 'json', data))
+    return blocks
 
-    detail = (data.get('__DEFAULT_SCOPE__') or {}).get('webapp.video-detail')
-    if not detail:
-        raise ResolveError('TikTok did not return the post — it may be private, deleted, or blocked')
-    item = (detail.get('itemInfo') or {}).get('itemStruct')
-    if not item:
-        raise ResolveError(detail.get('statusMsg') or 'Post not found or private')
 
-    image_post = item.get('imagePost')
-    if not image_post or not image_post.get('images'):
-        raise ResolveError('This post has no photos. For videos use the Videos page.')
+def walk(data):
+    stack = [data]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            yield node
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
 
+
+def locate(blocks):
+    for _, data in blocks:
+        for node in walk(data):
+            post = node.get('imagePost')
+            if isinstance(post, dict) and post.get('images'):
+                return 'detail', node
+            info = node.get('imagePostInfo')
+            if isinstance(info, dict) and info.get('displayImages'):
+                return 'embed', node
+    return None, None
+
+
+def find_urls(node):
+    if isinstance(node, str):
+        return [node] if node.startswith('http') else []
+    if isinstance(node, list):
+        flat = [x for x in node if isinstance(x, str) and x.startswith('http')]
+        if flat:
+            return flat
+        for item in node:
+            found = find_urls(item)
+            if found:
+                return found
+        return []
+    if isinstance(node, dict):
+        for key in ('imageURL', 'displayImage', 'urlList', 'url_list', 'UrlList'):
+            if key in node:
+                found = find_urls(node[key])
+                if found:
+                    return found
+        for value in node.values():
+            found = find_urls(value)
+            if found:
+                return found
+    return []
+
+
+def first_text(*values):
+    for value in values:
+        if isinstance(value, list):
+            value = value[0] if value else ''
+        if isinstance(value, str) and value:
+            return value
+    return ''
+
+
+def build_images(entries):
     images = []
-    for index, entry in enumerate(image_post['images'], start=1):
-        urls = (entry.get('imageURL') or {}).get('urlList') or []
+    for index, entry in enumerate(entries, start=1):
+        urls = find_urls(entry)
         if not urls:
             continue
         preferred = next((u for u in urls if '.jpeg' in u), urls[0])
@@ -96,36 +165,126 @@ def extract(html):
             'index': index,
             'url': preferred,
             'alternates': [u for u in urls if u != preferred],
-            'width': entry.get('imageWidth'),
-            'height': entry.get('imageHeight'),
+            'width': entry.get('imageWidth') or entry.get('width'),
+            'height': entry.get('imageHeight') or entry.get('height'),
         })
-    if not images:
-        raise ResolveError('No image links found in this post')
+    return images
 
-    music = item.get('music') or {}
+
+def build_post(kind, node):
+    if kind == 'detail':
+        entries = node['imagePost']['images']
+        music = node.get('music') or {}
+        info = node
+        author = (node.get('author') or {}).get('uniqueId')
+        caption = node.get('desc')
+        post_id = node.get('id')
+        music_title = music.get('title')
+        music_author = music.get('authorName')
+        music_url = music.get('playUrl')
+    else:
+        entries = node['imagePostInfo']['displayImages']
+        info = node.get('itemInfos') or {}
+        music = node.get('musicInfos') or {}
+        author = (node.get('authorInfos') or {}).get('uniqueId')
+        caption = info.get('text') or node.get('desc')
+        post_id = info.get('id') or node.get('id')
+        music_title = music.get('musicName') or music.get('title')
+        music_author = music.get('authorName')
+        music_url = music.get('playUrl')
+
+    images = build_images(entries)
+    if not images:
+        return None
     return {
-        'id': item.get('id'),
-        'caption': item.get('desc') or '',
-        'author': (item.get('author') or {}).get('uniqueId') or '',
+        'id': first_text(post_id),
+        'caption': first_text(caption),
+        'author': first_text(author),
         'images': images,
         'music': {
-            'title': music.get('title') or '',
-            'author': music.get('authorName') or '',
-            'url': music.get('playUrl') or '',
+            'title': first_text(music_title),
+            'author': first_text(music_author),
+            'url': first_text(music_url),
         },
     }
 
 
+def describe(blocks):
+    parts = []
+    for block_id, data in blocks[:4]:
+        scope = data.get('__DEFAULT_SCOPE__') if isinstance(data, dict) else None
+        source = scope if isinstance(scope, dict) else data
+        keys = list(source)[:8] if isinstance(source, dict) else []
+        parts.append(f"{block_id}: {', '.join(str(k) for k in keys)}")
+    return '; '.join(parts) or 'no embedded data'
+
+
+def extract(html):
+    blocks = json_blocks(html)
+    if not blocks:
+        raise ResolveError(
+            'TikTok did not return the post data — the request may have been blocked',
+            diag=describe(blocks),
+        )
+
+    kind, node = locate(blocks)
+    if node:
+        post = build_post(kind, node)
+        if post:
+            return post
+        raise ResolveError('No image links found in this post', diag=describe(blocks))
+
+    for _, data in blocks:
+        scope = data.get('__DEFAULT_SCOPE__') if isinstance(data, dict) else None
+        detail = (scope or {}).get('webapp.video-detail')
+        if not detail:
+            continue
+        item = (detail.get('itemInfo') or {}).get('itemStruct')
+        if item:
+            raise ResolveError('This post has no photos. For videos use the Videos page.', terminal=True)
+        status = detail.get('statusMsg')
+        if status:
+            raise ResolveError(status, terminal=True)
+
+    raise ResolveError(
+        'TikTok did not return the post — it may be private, deleted, or blocked',
+        diag=describe(blocks),
+    )
+
+
+def post_id_from(url):
+    match = POST_ID_RE.search(urlsplit(url).path)
+    return (match.group(1) or match.group(2)) if match else ''
+
+
 def resolve(url):
+    session = new_session()
     try:
-        final_url, html = fetch_html(url)
+        final_url, html = fetch_html(url, session)
     except requests.exceptions.ProxyError:
         raise ResolveError('The proxy refused the connection or is unreachable')
     except requests.exceptions.Timeout:
         raise ResolveError('TikTok took too long to respond')
     except requests.exceptions.RequestException:
         raise ResolveError('Could not reach TikTok')
-    post = extract(html)
+
+    try:
+        post = extract(html)
+    except ResolveError as first:
+        post_id = post_id_from(final_url)
+        if first.terminal or not post_id:
+            raise
+        try:
+            _, embed_html = fetch_html(EMBED_URL.format(post_id), session)
+            post = extract(embed_html)
+        except ResolveError as second:
+            raise ResolveError(
+                first.message,
+                diag=f'page: {first.diag}; embed: {second.diag or second.message}',
+            )
+        except requests.exceptions.RequestException:
+            raise ResolveError(first.message, diag=f'page: {first.diag}; embed: unreachable')
+
     post['url'] = final_url
     return post
 
